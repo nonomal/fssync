@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/wwqdrh/fssync/internal"
-	"github.com/wwqdrh/fssync/internal/store"
+	"github.com/wwqdrh/fssync/pkg/protocol"
+	"github.com/wwqdrh/fssync/pkg/store"
 )
 
 type DownloadConfig struct {
@@ -51,6 +51,10 @@ func (c *DownloadClient) CreateDownload(download *Download) (*Downloader, error)
 	}, nil
 }
 
+func (c *DownloadClient) DeleteDownload(d *Download) error {
+	return c.Config.Store.Delete(d.Fingerprint)
+}
+
 // 恢复下载
 func (c *DownloadClient) ResumeDownload(d *Download) (*Downloader, error) {
 	if d == nil {
@@ -78,9 +82,19 @@ func (c *DownloadClient) ResumeDownload(d *Download) (*Downloader, error) {
 }
 
 // 开始新的或者恢复下载
-func (c *DownloadClient) CreateOrResumeDownload(d *Download) (*Downloader, error) {
+func (c *DownloadClient) CreateOrResumeDownload(d *Download, force bool) (*Downloader, error) {
 	if d == nil {
 		return nil, ErrNilUpload
+	}
+
+	if force {
+		// 将配置和trunc删除，用于定期更新文件
+		if err := c.DeleteDownload(d); err != nil {
+			return nil, err
+		}
+		if err := d.CleanChuck(); err != nil {
+			return nil, err
+		}
 	}
 
 	uploader, err := c.ResumeDownload(d)
@@ -93,7 +107,7 @@ func (c *DownloadClient) CreateOrResumeDownload(d *Download) (*Downloader, error
 }
 
 func (c *DownloadClient) getmaxChunck(baseurl, filename string) (int64, error) {
-	req, err := http.NewRequest("GET", internal.PDownloadSpec.ClientUrl(baseurl, url.Values{"file": []string{filename}}), nil)
+	req, err := http.NewRequest("GET", protocol.PDownloadSpec.ClientUrl(baseurl, url.Values{"file": []string{filename}}), nil)
 	if err != nil {
 		return -1, err
 	}
@@ -118,7 +132,7 @@ func (c *DownloadClient) getmaxChunck(baseurl, filename string) (int64, error) {
 // 下载切片 fileurl trunc第几个分片
 // 保存到临时文件夹下
 func (c *DownloadClient) downloadChunck(baseurl, filename string, data io.WriteSeeker, chunck int64) error {
-	req, err := http.NewRequest("GET", internal.PDownloadTrucate.ClientUrl(baseurl, url.Values{"file": []string{filename}, "trunc": []string{fmt.Sprint(chunck)}}), nil)
+	req, err := http.NewRequest("GET", protocol.PDownloadTrucate.ClientUrl(baseurl, url.Values{"file": []string{filename}, "trunc": []string{fmt.Sprint(chunck)}}), nil)
 	if err != nil {
 		return err
 	}
@@ -142,7 +156,26 @@ func (c *DownloadClient) downloadChunck(baseurl, filename string, data io.WriteS
 }
 
 func (c *DownloadClient) FileList() ([]string, error) {
-	req, err := http.NewRequest("GET", internal.PDownloadList.ClientUrl(c.baseUrl, nil), nil)
+	req, err := http.NewRequest("GET", protocol.PDownloadList.ClientUrl(c.baseUrl, nil), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return strings.Split(string(data), ","), nil
+}
+
+func (c *DownloadClient) FileUpdateList() ([]string, error) {
+	req, err := http.NewRequest("GET", protocol.PDownloadUpdate.ClientUrl(c.baseUrl, nil), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +194,7 @@ func (c *DownloadClient) FileList() ([]string, error) {
 }
 
 func (c *DownloadClient) GetMd5(baseUrl, filename string) (string, error) {
-	req, err := http.NewRequest("GET", internal.PDownloadSpec.ClientUrl(baseUrl, url.Values{"file": []string{filename}}), nil)
+	req, err := http.NewRequest("GET", protocol.PDownloadSpec.ClientUrl(baseUrl, url.Values{"file": []string{filename}}), nil)
 	if err != nil {
 		return "", err
 	}
@@ -181,7 +214,7 @@ func (c *DownloadClient) GetMd5(baseUrl, filename string) (string, error) {
 
 // 发送调用，删除某个文件
 func (c *DownloadClient) DelFile(baseurl, filename string) error {
-	req, err := http.NewRequest("GET", internal.PDownloadDelete.ClientUrl(baseurl, url.Values{"file": []string{filename}}), nil)
+	req, err := http.NewRequest("GET", protocol.PDownloadDelete.ClientUrl(baseurl, url.Values{"file": []string{filename}}), nil)
 	if err != nil {
 		return err
 	}

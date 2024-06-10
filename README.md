@@ -33,12 +33,22 @@
 
 基于tus分片协议
 
+支持本地文件夹与远端webdav服务之间的同步
+
+- 坚果云
+
 ## 特性
 
 - 🗂 服务端
 - 📦 客户端
 
 ## 使用手册
+
+### 注意事项
+
+- 使用相对路径作为参数
+- 客户端在下载文件的时候，无论是对于需要分片的大文件还是小文件都需要经过filespec获取分片信息以及filetrunc下载对应分片两步
+
 ### 安装
 
 ```bash
@@ -49,10 +59,8 @@ fssync --help
 
 ### 使用
 
-操作界面为tui，根据提示填写必要参数即可
+`webdav同步`
 
 ```bash
-fssync -mode server
-
-fssync -mode client
+fssync client webdav
 ```

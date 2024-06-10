@@ -6,6 +6,14 @@ GO_TEST_FLAGS ?= -race -v
 TMP_BASE := .tmp
 TMP_COVERAGE := $(TMP_BASE)/coverage
 
+.PHONY: tools
+tools:
+	go install github.com/mfridman/tparse@latest
+
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.49.0
+
+	go install golang.org/x/tools/cmd/goimports@latest
+
 .PHONY: lint
 lint:
 	go vet $(GO_PKGS)
@@ -23,3 +31,11 @@ test:
 	@echo
 	@echo Open the coverage report
 	@echo open $(TMP_COVERAGE)/coverage.html
+
+.PYONY: dev
+dev:
+	go run . server -s ./tests/testdata/sample/stores -d ./tests/testdata/sample/data
+
+.PHONY: dev_client
+dev_client:
+	go run . client download --down ./tests/testdata/down --watch --all

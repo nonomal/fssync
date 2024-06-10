@@ -6,8 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/wwqdrh/fssync/internal"
 	"github.com/wwqdrh/gokit/logger"
+	"github.com/wwqdrh/gokit/ostool/fileindex"
 )
 
 const (
@@ -74,12 +74,13 @@ func (d *Downloader) Download(isDel bool) error {
 				<-ch
 			}()
 			logger.DefaultLogger.Debug("start chunck: " + fmt.Sprint(i))
-			stream, err := d.download.ChunckStream(i)
+			f, stream, err := d.download.ChunckStream(i)
 			if err != nil {
 				logger.DefaultLogger.Error("创建stream失败: " + fmt.Sprint(i))
 				atomic.AddInt64(&errTime, 1)
 				return
 			}
+			defer f.Close()
 
 			err = d.client.downloadChunck(d.download.fileUrl, d.download.fileName, stream, i)
 			if err != nil {
@@ -145,7 +146,7 @@ func (d *Downloader) CheckMd5(fingerprint string) error {
 		return err
 	}
 
-	localMd5, err := internal.FileMd5BySpec(d.download.localPath)
+	localMd5, err := fileindex.FileMd5BySpec(d.download.localPath)
 	if err != nil {
 		return err
 	}
